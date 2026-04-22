@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
 <meta charset="UTF-8">
-<title>Dashboard Académico · Excel & CSV</title>
+<title>Dashboard Académico · GitHub Data</title>
 <script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <style>
@@ -111,13 +111,13 @@ select{
 <body>
 <div class="container">
 
-<h2>📊 Dashboard Académico · Excel, CSV y JSON</h2>
+<h2>📊 Dashboard Académico · Datos desde GitHub</h2>
 
 <div class="panel">
     <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:15px;">
         <div>
             <input type="file" id="fileInput" accept=".json, .csv, .xlsx, .xls" style="padding:10px; border:1px dashed #9bb7d4; border-radius:40px; width:350px;">
-            <span id="fileStatus" style="margin-left:15px; color:#2e7d5e;">📁 Ningún archivo cargado</span>
+            <span id="fileStatus" style="margin-left:15px; color:#2e7d5e;">🔄 Intentando conectar con GitHub...</span>
         </div>
         <div>
             <span class="badge" id="contadorRegistros">0 registros</span>
@@ -196,6 +196,9 @@ select{
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
 
 <script>
+// ========== CONFIGURACIÓN GITHUB ==========
+const GITHUB_DATA_URL = 'datos.xlsx'; 
+
 // ========== VARIABLES GLOBALES ==========
 let dataOriginal = [];
 let dataPreparada = [];
@@ -207,10 +210,39 @@ const STORAGE_KEY = "dashboard_academico_filtros";
 
 // ========== INICIALIZACIÓN ==========
 window.onload = function() {
-    cargarFiltrosGuardados();
+    cargarDatosDesdeGithub();
 };
 
-// ========== CARGA DE ARCHIVO ==========
+// ========== CARGA DESDE GITHUB ==========
+async function cargarDatosDesdeGithub() {
+    try {
+        const response = await fetch(GITHUB_DATA_URL);
+        if (!response.ok) throw new Error("No se pudo cargar el archivo desde GitHub");
+        
+        const arrayBuffer = await response.arrayBuffer();
+        const data = new Uint8Array(arrayBuffer);
+        const workbook = XLSX.read(data, {type: 'array'});
+        const firstSheetName = workbook.SheetNames[0];
+        const worksheet = workbook.Sheets[firstSheetName];
+        
+        dataOriginal = XLSX.utils.sheet_to_json(worksheet);
+        nombreArchivo = GITHUB_DATA_URL;
+        archivoCargado = true;
+
+        if (!Array.isArray(dataOriginal)) dataOriginal = [dataOriginal];
+        
+        document.getElementById("fileStatus").innerHTML = "✅ Datos sincronizados: " + GITHUB_DATA_URL;
+        procesarYRenderizar();
+
+    } catch (error) {
+        console.warn("Aviso:", error.message);
+        document.getElementById("fileStatus").innerHTML = "📁 Suba un archivo localmente";
+        // Si hay filtros guardados pero no hay datos, intentamos cargar los filtros igual por si el usuario sube el archivo después
+        cargarFiltrosGuardados();
+    }
+}
+
+// ========== CARGA DE ARCHIVO LOCAL ==========
 document.getElementById("fileInput").addEventListener("change", function(e){
     const file = e.target.files[0];
     if (!file) return;
@@ -237,15 +269,7 @@ document.getElementById("fileInput").addEventListener("change", function(e){
             if (!Array.isArray(dataOriginal)) dataOriginal = [dataOriginal];
             
             document.getElementById("fileStatus").innerHTML = "✅ Archivo cargado: " + file.name;
-            document.getElementById("advertencia").innerHTML = "";
-            prepararDatos();
-            
-            if (localStorage.getItem(STORAGE_KEY)) {
-                cargarFiltrosGuardados();
-            } else {
-                cargarFiltrosIniciales();
-                aplicarFiltros();
-            }
+            procesarYRenderizar();
             
         } catch (error) {
             console.error(error);
@@ -260,21 +284,29 @@ document.getElementById("fileInput").addEventListener("change", function(e){
     }
 });
 
+function procesarYRenderizar() {
+    document.getElementById("advertencia").innerHTML = "";
+    prepararDatos();
+    
+    if (localStorage.getItem(STORAGE_KEY)) {
+        cargarFiltrosGuardados();
+    } else {
+        cargarFiltrosIniciales();
+        aplicarFiltros();
+    }
+}
+
 // ========== PREPARAR DATOS ==========
 function prepararDatos(){
     dataPreparada = dataOriginal.map(d => {
-        // Normalización de Calificación
         let calif = d["calificacion final"] || d["Calificación Final"] || d["Calificación"] || d["Promedio"] || 0;
         calif = parseFloat(calif) || 0;
         
-        // Normalización de Aprobados
         let aprob = d["Aprobados"] || d["Aprobado"];
         aprob = (aprob === 1 || aprob === "1" || aprob === true || aprob === "SÍ" || aprob === "SI") ? 1 : 0;
         
-        // CORRECCIÓN CLAVE: El archivo CSV tiene "CURP:" con dos puntos.
         let curp = d["CURP:"] || d["CURP"] || d["curp"] || d["Curp"] || "";
 
-        // Reactivos (Preguntas 1 a 15)
         let reactivos = [];
         for (let i = 1; i <= 15; i++) {
             let val = d[i.toString()];
@@ -311,7 +343,6 @@ function actualizarKPIs(data){
     let totalAprobados = data.reduce((a, b) => a + b.aprobado, 0);
     let pctAprob = ((totalAprobados / data.length) * 100).toFixed(1);
     
-    // Cálculo de alumnos únicos basado en la columna CURP (filtrando vacíos)
     const listaCurpsValidas = data
         .map(d => d.curp)
         .filter(c => c && c !== "" && c !== "undefined");
@@ -328,7 +359,7 @@ function actualizarKPIs(data){
 // ========== PERSISTENCIA ==========
 function guardarEstado() {
     if (!archivoCargado) {
-        document.getElementById("advertencia").innerHTML = "⚠️ No hay archivo cargado.";
+        document.getElementById("advertencia").innerHTML = "⚠️ No hay datos cargados.";
         return;
     }
     filtrosActuales = {
@@ -411,7 +442,6 @@ function cargarFiltrosIniciales(){
     actualizarMaterias();
 }
 
-// Listeners Filtros
 document.getElementById("filtroSector").onchange = () => { actualizarPlanteles(); actualizarMaterias(); aplicarFiltros(); };
 document.getElementById("filtroPlantel").onchange = () => { actualizarMaterias(); aplicarFiltros(); };
 document.getElementById("filtroMateria").onchange = () => aplicarFiltros();
@@ -437,10 +467,8 @@ function aplicarFiltros() {
     document.getElementById("updateTime").innerText = `Actualizado: ${new Date().toLocaleString()}`;
 }
 
-// ========== UTILIDADES ==========
 function promedio(arr){ return arr.length === 0 ? 0 : arr.reduce((a,b) => a + b, 0) / arr.length; }
 
-// ========== FUNCIONES DE AGRUPACIÓN ==========
 function agruparPromedio(data, campo){
     let grupos = {};
     data.forEach(d => {
@@ -461,7 +489,6 @@ function agruparAprob(data, campo){
     return { labels: Object.keys(grupos), valores: Object.keys(grupos).map(k => (grupos[k].a / grupos[k].t * 100)) };
 }
 
-// ========== GRÁFICAS ==========
 function graficar(data){
     if (data.length === 0) return;
     
