@@ -1,0 +1,495 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>Dashboard Académico · Excel & CSV</title>
+<script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+body{
+    font-family: 'Segoe UI', Arial, sans-serif;
+    background:#f4f6f9;
+    margin:20px;
+}
+.container{
+    max-width:1400px;
+    margin:auto;
+}
+.panel{
+    background:white;
+    padding:15px 20px;
+    margin-bottom:15px;
+    border-radius:12px;
+    box-shadow:0 4px 10px rgba(0,0,0,0.05);
+}
+.kpis{
+    display:flex;
+    gap:20px;
+    flex-wrap:wrap;
+}
+.kpi{
+    flex:1;
+    min-width:150px;
+    text-align:center;
+    background:#f9fafc;
+    padding:15px;
+    border-radius:10px;
+}
+.kpi h4{
+    margin:0 0 10px 0;
+    color:#2c3e50;
+    font-weight:400;
+}
+.kpi h2{
+    margin:0;
+    color:#1e3a5f;
+    font-size:2.2rem;
+}
+select{
+    margin-right:15px;
+    padding:8px 15px;
+    border-radius:30px;
+    border:1px solid #d0ddee;
+    background:white;
+    font-size:0.95rem;
+    min-width:180px;
+}
+.chart{
+    height:380px;
+    margin-top:10px;
+}
+.fila-graficos{
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:15px;
+}
+.fila-graficos .panel{
+    padding:10px;
+}
+.badge{
+    background:#1e3a5f;
+    color:white;
+    padding:2px 10px;
+    border-radius:30px;
+    font-size:0.8rem;
+}
+.btn-persist{
+    background:#1e3a5f;
+    color:white;
+    border:none;
+    padding:8px 18px;
+    border-radius:40px;
+    cursor:pointer;
+    font-size:0.9rem;
+    margin-left:10px;
+    transition:0.2s;
+}
+.btn-persist:hover{
+    background:#143049;
+}
+.btn-outline{
+    background:white;
+    border:1px solid #1e3a5f;
+    color:#1e3a5f;
+    padding:8px 18px;
+    border-radius:40px;
+    cursor:pointer;
+    margin-left:10px;
+}
+.persist-bar{
+    display:flex;
+    flex-wrap:wrap;
+    gap:10px;
+    align-items:center;
+    margin-top:15px;
+    padding-top:15px;
+    border-top:1px solid #e2eaf2;
+}
+</style>
+</head>
+
+<body>
+<div class="container">
+
+<h2>📊 Dashboard Académico · Excel, CSV y JSON</h2>
+
+<div class="panel">
+    <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:15px;">
+        <div>
+            <input type="file" id="fileInput" accept=".json, .csv, .xlsx, .xls" style="padding:10px; border:1px dashed #9bb7d4; border-radius:40px; width:350px;">
+            <span id="fileStatus" style="margin-left:15px; color:#2e7d5e;">📁 Ningún archivo cargado</span>
+        </div>
+        <div>
+            <span class="badge" id="contadorRegistros">0 registros</span>
+        </div>
+    </div>
+    
+    <div class="persist-bar">
+        <button class="btn-persist" id="guardarEstadoBtn">💾 Guardar filtros</button>
+        <button class="btn-outline" id="cargarEstadoBtn">📂 Cargar filtros guardados</button>
+        <button class="btn-outline" id="limpiarEstadoBtn">🗑️ Limpiar filtros guardados</button>
+        <span style="margin-left:auto; color:#6f8cac; font-size:0.9rem;" id="estadoInfo"></span>
+    </div>
+    <div style="margin-top:10px; font-size:0.9rem; color:#c0392b;" id="advertencia"></div>
+</div>
+
+<div class="panel">
+    <b>🔍 Filtros interactivos:</b><br><br>
+    <div style="display:flex; flex-wrap:wrap; gap:15px;">
+        <div>
+            Sector:<br>
+            <select id="filtroSector"><option value="Todos">Todos</option></select>
+        </div>
+        <div>
+            Plantel:<br>
+            <select id="filtroPlantel"><option value="Todos">Todos</option></select>
+        </div>
+        <div>
+            Materia:<br>
+            <select id="filtroMateria"><option value="Todos">Todos</option></select>
+        </div>
+        <div style="align-self:flex-end;">
+            <button id="clearFilters" style="padding:8px 20px; border-radius:40px; border:1px solid #b0c8df; background:white; cursor:pointer;">🧹 Limpiar filtros</button>
+        </div>
+    </div>
+</div>
+
+<div class="panel kpis">
+    <div class="kpi">
+        <h4>📌 Promedio General</h4>
+        <h2 id="kpiProm">-</h2>
+    </div>
+    <div class="kpi">
+        <h4>✅ % Aprobación</h4>
+        <h2 id="kpiAprob">-</h2>
+    </div>
+    <div class="kpi">
+        <h4>👥 Estudiantes Únicos</h4>
+        <h2 id="kpiAlumnos">-</h2>
+    </div>
+    <div class="kpi">
+        <h4>📋 Total Evaluaciones</h4>
+        <h2 id="kpiTotal">-</h2>
+    </div>
+    <div class="kpi">
+        <h4>⚠️ Materias en Riesgo</h4>
+        <h2 id="kpiRiesgo">-</h2>
+    </div>
+</div>
+
+<div class="fila-graficos">
+    <div class="panel chart" id="grafMateria"></div>
+    <div class="panel chart" id="grafAprob"></div>
+</div>
+
+<div class="fila-graficos">
+    <div class="panel chart" id="grafDistrib"></div>
+    <div class="panel chart" id="grafPlantel"></div>
+</div>
+
+<div class="panel chart" id="grafHeat"></div>
+
+<div style="text-align:right; color:#7a93b0; margin-top:10px;" id="updateTime"></div>
+
+</div>
+
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+
+<script>
+// ========== VARIABLES GLOBALES ==========
+let dataOriginal = [];
+let dataPreparada = [];
+let filtrosActuales = { sector: "Todos", plantel: "Todos", materia: "Todos" };
+let archivoCargado = false;
+let nombreArchivo = "";
+
+const STORAGE_KEY = "dashboard_academico_filtros";
+
+// ========== INICIALIZACIÓN ==========
+window.onload = function() {
+    cargarFiltrosGuardados();
+};
+
+// ========== CARGA DE ARCHIVO ==========
+document.getElementById("fileInput").addEventListener("change", function(e){
+    const file = e.target.files[0];
+    if (!file) return;
+    
+    nombreArchivo = file.name;
+    archivoCargado = true;
+    const extension = file.name.split('.').pop().toLowerCase();
+    
+    const reader = new FileReader();
+    
+    reader.onload = function(event){
+        try {
+            if (extension === 'json') {
+                dataOriginal = JSON.parse(event.target.result);
+            } 
+            else {
+                const data = new Uint8Array(event.target.result);
+                const workbook = XLSX.read(data, {type: 'array'});
+                const firstSheetName = workbook.SheetNames[0];
+                const worksheet = workbook.Sheets[firstSheetName];
+                dataOriginal = XLSX.utils.sheet_to_json(worksheet);
+            }
+
+            if (!Array.isArray(dataOriginal)) dataOriginal = [dataOriginal];
+            
+            document.getElementById("fileStatus").innerHTML = "✅ Archivo cargado: " + file.name;
+            document.getElementById("advertencia").innerHTML = "";
+            prepararDatos();
+            
+            if (localStorage.getItem(STORAGE_KEY)) {
+                cargarFiltrosGuardados();
+            } else {
+                cargarFiltrosIniciales();
+                aplicarFiltros();
+            }
+            
+        } catch (error) {
+            console.error(error);
+            alert("Error al procesar el archivo: " + error.message);
+        }
+    };
+
+    if (extension === 'json') {
+        reader.readAsText(file);
+    } else {
+        reader.readAsArrayBuffer(file);
+    }
+});
+
+// ========== PREPARAR DATOS ==========
+function prepararDatos(){
+    dataPreparada = dataOriginal.map(d => {
+        // Normalización de Calificación
+        let calif = d["calificacion final"] || d["Calificación Final"] || d["Calificación"] || d["Promedio"] || 0;
+        calif = parseFloat(calif) || 0;
+        
+        // Normalización de Aprobados
+        let aprob = d["Aprobados"] || d["Aprobado"];
+        aprob = (aprob === 1 || aprob === "1" || aprob === true || aprob === "SÍ" || aprob === "SI") ? 1 : 0;
+        
+        // CORRECCIÓN CLAVE: El archivo CSV tiene "CURP:" con dos puntos.
+        let curp = d["CURP:"] || d["CURP"] || d["curp"] || d["Curp"] || "";
+
+        // Reactivos (Preguntas 1 a 15)
+        let reactivos = [];
+        for (let i = 1; i <= 15; i++) {
+            let val = d[i.toString()];
+            if (val === undefined) val = d[`pregunta_${i}`] || d[`Pregunta${i}`] || 0;
+            reactivos.push(parseInt(val) === 1 ? 1 : 0);
+        }
+        
+        return {
+            sector: d["Sector"] || "Sin dato",
+            plantel: d["Nombre Plantel"] || d["Plantel"] || "Sin dato",
+            materia: d["Materia"] || "Sin dato",
+            curp: String(curp).trim(), 
+            calificacion: calif,
+            aprobado: aprob,
+            reactivos: reactivos
+        };
+    });
+    
+    document.getElementById("contadorRegistros").innerText = dataPreparada.length + " registros";
+}
+
+// ========== KPIs ==========
+function actualizarKPIs(data){
+    if (data.length === 0) {
+        document.getElementById("kpiProm").innerText = "-";
+        document.getElementById("kpiAprob").innerText = "-";
+        document.getElementById("kpiAlumnos").innerText = "0";
+        document.getElementById("kpiTotal").innerText = "0";
+        document.getElementById("kpiRiesgo").innerText = "0";
+        return;
+    }
+    
+    let prom = promedio(data.map(d => d.calificacion));
+    let totalAprobados = data.reduce((a, b) => a + b.aprobado, 0);
+    let pctAprob = ((totalAprobados / data.length) * 100).toFixed(1);
+    
+    // Cálculo de alumnos únicos basado en la columna CURP (filtrando vacíos)
+    const listaCurpsValidas = data
+        .map(d => d.curp)
+        .filter(c => c && c !== "" && c !== "undefined");
+    
+    let alumnosUnicos = new Set(listaCurpsValidas).size;
+
+    document.getElementById("kpiProm").innerText = prom.toFixed(2);
+    document.getElementById("kpiAprob").innerText = pctAprob + "%";
+    document.getElementById("kpiAlumnos").innerText = alumnosUnicos.toLocaleString(); 
+    document.getElementById("kpiTotal").innerText = data.length.toLocaleString();
+    document.getElementById("kpiRiesgo").innerText = data.filter(d => d.aprobado === 0).length.toLocaleString();
+}
+
+// ========== PERSISTENCIA ==========
+function guardarEstado() {
+    if (!archivoCargado) {
+        document.getElementById("advertencia").innerHTML = "⚠️ No hay archivo cargado.";
+        return;
+    }
+    filtrosActuales = {
+        sector: document.getElementById("filtroSector").value,
+        plantel: document.getElementById("filtroPlantel").value,
+        materia: document.getElementById("filtroMateria").value
+    };
+    const estado = { filtros: filtrosActuales, timestamp: new Date().toISOString(), nombreArchivo: nombreArchivo };
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(estado));
+    document.getElementById("estadoInfo").innerHTML = "✅ Filtros guardados: " + new Date().toLocaleTimeString();
+}
+
+function cargarFiltrosGuardados() {
+    const saved = localStorage.getItem(STORAGE_KEY);
+    if (!saved) return false;
+    const estado = JSON.parse(saved);
+    filtrosActuales = estado.filtros;
+    document.getElementById("estadoInfo").innerHTML = "🔄 Filtros cargados: " + new Date(estado.timestamp).toLocaleString();
+    if (dataPreparada.length > 0) {
+        restaurarSelectsYFiltros();
+        aplicarFiltros(true);
+    }
+    return true;
+}
+
+function limpiarEstado() {
+    if (confirm("¿Eliminar permanentemente los filtros guardados?")) {
+        localStorage.removeItem(STORAGE_KEY);
+        document.getElementById("estadoInfo").innerHTML = "🗑️ Filtros eliminados";
+    }
+}
+
+// ========== SELECTS Y FILTROS ==========
+function restaurarSelectsYFiltros() {
+    llenarSelect("filtroSector", valoresUnicos(dataPreparada, "sector"));
+    actualizarPlanteles();
+    document.getElementById("filtroSector").value = filtrosActuales.sector;
+    actualizarPlanteles();
+    document.getElementById("filtroPlantel").value = filtrosActuales.plantel;
+    actualizarMaterias();
+    document.getElementById("filtroMateria").value = filtrosActuales.materia;
+}
+
+function llenarSelect(id, valores){
+    const select = document.getElementById(id);
+    select.innerHTML = `<option value="Todos">Todos</option>`;
+    valores.forEach(v => {
+        if (v && v !== "Sin dato") {
+            let op = document.createElement("option");
+            op.value = v; op.text = v;
+            select.appendChild(op);
+        }
+    });
+}
+
+function valoresUnicos(data, campo){
+    return [...new Set(data.map(d => d[campo]))].sort();
+}
+
+function actualizarPlanteles(){
+    let sector = document.getElementById("filtroSector").value;
+    let filtrado = sector === "Todos" ? dataPreparada : dataPreparada.filter(d => d.sector === sector);
+    llenarSelect("filtroPlantel", valoresUnicos(filtrado, "plantel"));
+}
+
+function actualizarMaterias(){
+    let sector = document.getElementById("filtroSector").value;
+    let plantel = document.getElementById("filtroPlantel").value;
+    let filtrado = dataPreparada.filter(d => 
+        (sector === "Todos" || d.sector === sector) &&
+        (plantel === "Todos" || d.plantel === plantel)
+    );
+    llenarSelect("filtroMateria", valoresUnicos(filtrado, "materia"));
+}
+
+function cargarFiltrosIniciales(){
+    if (dataPreparada.length === 0) return;
+    llenarSelect("filtroSector", valoresUnicos(dataPreparada, "sector"));
+    actualizarPlanteles();
+    actualizarMaterias();
+}
+
+// Listeners Filtros
+document.getElementById("filtroSector").onchange = () => { actualizarPlanteles(); actualizarMaterias(); aplicarFiltros(); };
+document.getElementById("filtroPlantel").onchange = () => { actualizarMaterias(); aplicarFiltros(); };
+document.getElementById("filtroMateria").onchange = () => aplicarFiltros();
+document.getElementById("clearFilters").onclick = () => {
+    document.getElementById("filtroSector").value = "Todos";
+    actualizarPlanteles(); actualizarMaterias(); aplicarFiltros();
+};
+
+function aplicarFiltros() {
+    if (dataPreparada.length === 0) return;
+    let s = document.getElementById("filtroSector").value;
+    let p = document.getElementById("filtroPlantel").value;
+    let m = document.getElementById("filtroMateria").value;
+    
+    let dataFiltrada = dataPreparada.filter(d => 
+        (s === "Todos" || d.sector === s) &&
+        (p === "Todos" || d.plantel === p) &&
+        (m === "Todos" || d.materia === m)
+    );
+    
+    actualizarKPIs(dataFiltrada);
+    graficar(dataFiltrada);
+    document.getElementById("updateTime").innerText = `Actualizado: ${new Date().toLocaleString()}`;
+}
+
+// ========== UTILIDADES ==========
+function promedio(arr){ return arr.length === 0 ? 0 : arr.reduce((a,b) => a + b, 0) / arr.length; }
+
+// ========== FUNCIONES DE AGRUPACIÓN ==========
+function agruparPromedio(data, campo){
+    let grupos = {};
+    data.forEach(d => {
+        let key = d[campo];
+        if (!grupos[key]) grupos[key] = [];
+        grupos[key].push(d.calificacion);
+    });
+    return { labels: Object.keys(grupos), valores: Object.keys(grupos).map(k => promedio(grupos[k])) };
+}
+
+function agruparAprob(data, campo){
+    let grupos = {};
+    data.forEach(d => {
+        let key = d[campo];
+        if (!grupos[key]) grupos[key] = { a: 0, t: 0 };
+        grupos[key].a += d.aprobado; grupos[key].t++;
+    });
+    return { labels: Object.keys(grupos), valores: Object.keys(grupos).map(k => (grupos[k].a / grupos[k].t * 100)) };
+}
+
+// ========== GRÁFICAS ==========
+function graficar(data){
+    if (data.length === 0) return;
+    
+    let m = agruparPromedio(data, "materia");
+    Plotly.react("grafMateria", [{ x: m.labels, y: m.valores, type: "bar", marker: { color: "#3b7a9e" } }], { title: "📊 Promedio por Materia", yaxis: { range: [0, 10] } });
+    
+    let a = agruparAprob(data, "materia");
+    Plotly.react("grafAprob", [{ x: a.labels, y: a.valores, type: "bar", marker: { color: "#2e7d5e" } }], { title: "✅ % Aprobación por Materia", yaxis: { range: [0, 100] } });
+    
+    Plotly.react("grafDistrib", [{ x: data.map(d => d.calificacion), type: "histogram", marker: { color: "#bf6f4a" } }], { title: "📈 Distribución de Calificaciones" });
+    
+    let p = agruparPromedio(data, "plantel");
+    Plotly.react("grafPlantel", [{ x: p.labels, y: p.valores, type: "bar", marker: { color: "#9b59b6" } }], { title: "🏫 Promedio por Plantel", yaxis: { range: [0, 10] } });
+
+    let materias = valoresUnicos(data, "materia");
+    let heatData = materias.map(mat => {
+        let subset = data.filter(d => d.materia === mat);
+        return Array.from({length: 15}, (_, i) => {
+            let aciertos = subset.reduce((acc, d) => acc + (d.reactivos[i] === 1 ? 1 : 0), 0);
+            return subset.length > 0 ? (aciertos / subset.length * 100) : 0;
+        });
+    });
+    Plotly.react("grafHeat", [{ z: heatData, x: Array.from({length: 15}, (_, i) => `P${i+1}`), y: materias, type: "heatmap", colorscale: "Viridis" }], { title: "🔥 % Aciertos por Pregunta" });
+}
+
+document.getElementById("guardarEstadoBtn").onclick = guardarEstado;
+document.getElementById("cargarEstadoBtn").onclick = cargarFiltrosGuardados;
+document.getElementById("limpiarEstadoBtn").onclick = limpiarEstado;
+</script>
+</body>
+</html>
